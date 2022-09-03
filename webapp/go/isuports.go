@@ -496,12 +496,14 @@ func tenantsAddHandler(c echo.Context) error {
 
 	ctx := context.Background()
 	now := time.Now().Unix()
-	insertRes, err := adminDB.ExecContext(
+	//insertRes, err := adminDB.QueryRowContext(
+	row := adminDB.QueryRowContext(
 		ctx,
 		"INSERT INTO tenant (name, display_name, created_at, updated_at) VALUES (?, ?, ?, ?) RETURNING id",
 		name, displayName, now, now,
 	)
-	if err != nil {
+	var id int64
+	if err := row.Scan(&id); err != nil {
 		//if merr, ok := err.(*mysql.MySQLError); ok && merr.Number == 1062 { // duplicate entry
 		//	return echo.NewHTTPError(http.StatusBadRequest, "duplicate tenant")
 		//}
@@ -515,10 +517,12 @@ func tenantsAddHandler(c echo.Context) error {
 		)
 	}
 
-	id, err := insertRes.LastInsertId()
-	if err != nil {
-		return fmt.Errorf("error get LastInsertId: %w", err)
-	}
+	// postgres ではいらない
+	//id, err := insertRes.LastInsertId()
+	//if err != nil {
+	//	return fmt.Errorf("error get LastInsertId: %w", err)
+	//}
+
 	// NOTE: 先にadminDBに書き込まれることでこのAPIの処理中に
 	//       /api/admin/tenants/billingにアクセスされるとエラーになりそう
 	//       ロックなどで対処したほうが良さそう
