@@ -498,7 +498,7 @@ func tenantsAddHandler(c echo.Context) error {
 	now := time.Now().Unix()
 	insertRes, err := adminDB.ExecContext(
 		ctx,
-		"INSERT INTO tenant (name, display_name, created_at, updated_at) VALUES (?, ?, ?, ?)",
+		"INSERT INTO tenant (name, display_name, created_at, updated_at) VALUES (?, ?, ?, ?) RETURNING id",
 		name, displayName, now, now,
 	)
 	if err != nil {
