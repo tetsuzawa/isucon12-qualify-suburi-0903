@@ -1486,21 +1486,12 @@ func competitionRankingHandler(c echo.Context) error {
 		ctx,
 		&crs,
 		`
-SELECT
-    ranking.player_id,
-    ranking.score,
-    player.display_name
-FROM (SELECT *,
-             rank() OVER (
-                 partition by player_id
-                 ORDER BY row_num DESC
-                 ) as rank
-      FROM player_score
-      WHERE tenant_id = $1
-            AND competition_id = $2) AS ranking
-         INNER JOIN player ON ranking.player_id = player.id
-WHERE rank = 1
-ORDER BY score DESC LIMIT $3 OFFSET $4;
+SELECT player_id, score, display_name
+FROM player_score
+         INNER JOIN player p on player_score.player_id = p.id
+WHERE player_score.tenant_id = $1
+  AND competition_id = $2
+  ORDER BY score DESC LIMIT $3 OFFSET $4;
 `,
 		tenant.ID,
 		competitionID,
