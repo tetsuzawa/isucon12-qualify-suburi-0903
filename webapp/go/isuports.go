@@ -497,7 +497,13 @@ func tenantsAddHandler(c echo.Context) error {
 	ctx := context.Background()
 	now := time.Now().Unix()
 	//insertRes, err := adminDB.QueryRowContext(
-	row := adminDB.QueryRowContext(
+
+	tx, err := adminDB.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to start tx %w", err)
+	}
+
+	row := tx.QueryRowContext(
 		ctx,
 		"INSERT INTO tenant (name, display_name, created_at, updated_at) VALUES (?, ?, ?, ?) RETURNING id",
 		name, displayName, now, now,
@@ -528,6 +534,10 @@ func tenantsAddHandler(c echo.Context) error {
 	//       ロックなどで対処したほうが良さそう
 	if err := createTenantDB(id); err != nil {
 		return fmt.Errorf("error createTenantDB: id=%d name=%s %w", id, name, err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failld to commit")
 	}
 
 	res := TenantsAddHandlerResult{
