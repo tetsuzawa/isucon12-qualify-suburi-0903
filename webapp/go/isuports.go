@@ -1295,7 +1295,7 @@ func playerHandler(c echo.Context) error {
 		ctx,
 		&psds,
 		`
-SELECT competition.title, player_score.score
+SELECT competition.title, ranking.score
 FROM (SELECT *,
              rank() OVER (
                  partition by competition_id
