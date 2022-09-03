@@ -84,7 +84,7 @@ func connectAdminDB() (*sqlx.DB, error) {
 	//config.DBName = getEnv("ISUCON_DB_NAME", "isuports")
 	//config.ParseTime = true
 	//dsn := config.FormatDSN()
-	host := getEnv("ISUCON_DB_HOST", "127.0.0.1") + ":"
+	host := getEnv("ISUCON_DB_HOST", "127.0.0.1")
 	port := getEnv("ISUCON_DB_PORT", "3306")
 	user := getEnv("ISUCON_DB_USER", "isucon")
 	pass := getEnv("ISUCON_DB_PASSWORD", "isucon")
@@ -95,7 +95,7 @@ func connectAdminDB() (*sqlx.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect postgre db: %w", err)
 	}
-	return db, err
+	return db, nil
 }
 
 // テナントDBのパスを返す
