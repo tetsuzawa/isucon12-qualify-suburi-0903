@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -477,6 +478,13 @@ type TenantsAddHandlerResult struct {
 // テナントを追加する
 // POST /api/admin/tenants/add
 func tenantsAddHandler(c echo.Context) error {
+	var threshold float32 = 0.2
+	retryAfter := "1"
+	if rand.Float32() < threshold {
+		c.Response().Header().Set(echo.HeaderRetryAfter, retryAfter)
+		return c.JSON(http.StatusTooManyRequests, "")
+	}
+
 	v, err := parseViewer(c)
 	if err != nil {
 		return fmt.Errorf("error parseViewer: %w", err)
@@ -841,6 +849,13 @@ type PlayersAddHandlerResult struct {
 // GET /api/organizer/players/add
 // テナントに参加者を追加する
 func playersAddHandler(c echo.Context) error {
+	var threshold float32 = 0.2
+	retryAfter := "1"
+	if rand.Float32() < threshold {
+		c.Response().Header().Set(echo.HeaderRetryAfter, retryAfter)
+		return c.JSON(http.StatusTooManyRequests, "")
+	}
+
 	ctx := context.Background()
 	v, err := parseViewer(c)
 	if err != nil {
