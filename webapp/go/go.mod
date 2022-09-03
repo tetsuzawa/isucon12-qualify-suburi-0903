@@ -40,9 +40,9 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.1 // indirect
-	go.uber.org/atomic v1.6.0 // indirect
-	go.uber.org/multierr v1.5.0 // indirect
-	go.uber.org/zap v1.13.0 // indirect
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.6.0 // indirect
+	go.uber.org/zap v1.23.0 // indirect
 	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90 // indirect
 	golang.org/x/net v0.0.0-20220607020251-c690dde0001d // indirect
 	golang.org/x/sys v0.0.0-20220608164250-635b8c9b7f68 // indirect
