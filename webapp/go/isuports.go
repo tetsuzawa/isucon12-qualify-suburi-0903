@@ -21,6 +21,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/gofrs/flock"
 	"github.com/jmoiron/sqlx"
+	"github.com/kayac/go-katsubushi"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
@@ -98,29 +99,24 @@ func createTenantDB(id int64) error {
 }
 
 // システム全体で一意なIDを生成する
+var idGenerator katsubushi.Generator
+
+func initIDGenerator() error {
+	var err error
+	workerID, err := strconv.ParseInt(getEnv("ISUCON_KATSUBUSHI_WORKER_ID", "1"), 10, 64)
+	if err != nil {
+		return err
+	}
+	idGenerator, err = katsubushi.NewGenerator(uint(workerID))
+	return err
+}
+
 func dispenseID(ctx context.Context) (string, error) {
-	var id int64
-	var lastErr error
-	for i := 0; i < 100; i++ {
-		var ret sql.Result
-		ret, err := adminDB.ExecContext(ctx, "REPLACE INTO id_generator (stub) VALUES (?);", "a")
-		if err != nil {
-			if merr, ok := err.(*mysql.MySQLError); ok && merr.Number == 1213 { // deadlock
-				lastErr = fmt.Errorf("error REPLACE INTO id_generator: %w", err)
-				continue
-			}
-			return "", fmt.Errorf("error REPLACE INTO id_generator: %w", err)
-		}
-		id, err = ret.LastInsertId()
-		if err != nil {
-			return "", fmt.Errorf("error ret.LastInsertId: %w", err)
-		}
-		break
+	id, err := idGenerator.NextID()
+	if err != nil {
+		return "", fmt.Errorf("error idGenerator.NextID: %w", err)
 	}
-	if id != 0 {
-		return fmt.Sprintf("%x", id), nil
-	}
-	return "", lastErr
+	return strconv.FormatInt(int64(id), 10), nil
 }
 
 // 全APIにCache-Control: privateを設定する
@@ -191,6 +187,11 @@ func Run() {
 	}
 	adminDB.SetMaxOpenConns(10)
 	defer adminDB.Close()
+
+	if err := initIDGenerator(); err != nil {
+		e.Logger.Fatalf("failed to initalize id generator: %v", err)
+		return
+	}
 
 	port := getEnv("SERVER_APP_PORT", "3000")
 	e.Logger.Infof("starting isuports server on : %s ...", port)
