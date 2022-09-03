@@ -10,7 +10,8 @@ for ($i=1; $i <= 100; $i++) {
     $sql = "INSERT INTO public.competition SELECT * from sqlite{$i}.competition;";
     $sql = "INSERT INTO public.player SELECT * from sqlite{$i}.player;";
     $sql = "INSERT INTO public.player_score SELECT * from sqlite{$i}.player_score;";
-    echo $sql . PHP_EOL;
 
+    $sql = "INSERT INTO public.player_score SELECT id,tenant_id,player_id,competition_id,score,row_num,created_at,updated_at FROM (SELECT *,rank() OVER (partition by tenant_id,competition_id,player_id ORDER BY row_num DESC) as rank FROM sqlite{$i}.player_score) AS ranking WHERE rank = 1;";
+    echo $sql . PHP_EOL;
 }
 
