@@ -1199,16 +1199,17 @@ func competitionScoreHandler(c echo.Context) error {
 	for _, playerScoreRow := range playerScoreMap {
 		playerScoreRows = append(playerScoreRows, playerScoreRow)
 	}
+	//
+	//if _, err := tx.ExecContext(
+	//	ctx,
+	//	"DELETE FROM player_score WHERE tenant_id = ? AND competition_id = ?",
+	//	v.tenantID,
+	//	competitionID,
+	//); err != nil {
+	//	tx.Rollback()
+	//	return fmt.Errorf("error Delete player_score: tenantID=%d, competitionID=%s, %w", v.tenantID, competitionID, err)
+	//}
 
-	if _, err := tx.ExecContext(
-		ctx,
-		"DELETE FROM player_score WHERE tenant_id = ? AND competition_id = ?",
-		v.tenantID,
-		competitionID,
-	); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("error Delete player_score: tenantID=%d, competitionID=%s, %w", v.tenantID, competitionID, err)
-	}
 	//for _, ps := range playerScoreRows {
 	//	if _, err := tx.NamedExecContext(
 	//		ctx,
