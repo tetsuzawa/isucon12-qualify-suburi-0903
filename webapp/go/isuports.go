@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -160,7 +161,7 @@ func SetCacheControlPrivate(next echo.HandlerFunc) echo.HandlerFunc {
 // Run は cmd/isuports/main.go から呼ばれるエントリーポイントです
 func Run() {
 	e := echo.New()
-	e.Debug = true
+	//e.Debug = true
 	e.Logger.SetLevel(log.DEBUG)
 
 	var (
@@ -177,7 +178,7 @@ func Run() {
 	}
 	defer sqlLogger.Close()
 
-	e.Use(middleware.Logger())
+	//e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(SetCacheControlPrivate)
 
@@ -518,7 +519,7 @@ func tenantsAddHandler(c echo.Context) error {
 		//	return echo.NewHTTPError(http.StatusBadRequest, "duplicate tenant")
 		//}
 		if strings.Contains(err.Error(), "duplicate key value violates") {
-			log.Printf("duplicate error: name: %v, display_name %v, err: %+v", name, displayName, err)
+			//log.Printf("duplicate error: name: %v, display_name %v, err: %+v", name, displayName, err)
 			return echo.NewHTTPError(http.StatusBadRequest, "duplicate tenant")
 		}
 		return fmt.Errorf(
@@ -526,7 +527,7 @@ func tenantsAddHandler(c echo.Context) error {
 			name, displayName, now, now, err,
 		)
 	}
-	log.Printf("returned id :%v", id)
+	//log.Printf("returned id :%v", id)
 
 	// postgres ではいらない
 	//id, err := insertRes.LastInsertId()
@@ -580,8 +581,14 @@ type VisitHistorySummaryRow struct {
 	MinCreatedAt int64  `db:"min_created_at"`
 }
 
+var billingCache sync.Map
+
 // 大会ごとの課金レポートを計算する
 func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID int64, competitonID string) (*BillingReport, error) {
+	_bil, ok := billingCache.Load(competitonID)
+	if ok {
+		return _bil.(*BillingReport), nil
+	}
 	comp, err := retrieveCompetition(ctx, tenantDB, competitonID)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieveCompetition: %w", err)
@@ -641,7 +648,7 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 			}
 		}
 	}
-	return &BillingReport{
+	bil := &BillingReport{
 		CompetitionID:     comp.ID,
 		CompetitionTitle:  comp.Title,
 		PlayerCount:       playerCount,
@@ -649,7 +656,10 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 		BillingPlayerYen:  100 * playerCount, // スコアを登録した参加者は100円
 		BillingVisitorYen: 10 * visitorCount, // ランキングを閲覧だけした(スコアを登録していない)参加者は10円
 		BillingYen:        100*playerCount + 10*visitorCount,
-	}, nil
+	}
+	billingCache.Store(competitonID, bil)
+
+	return bil, nil
 }
 
 type TenantWithBilling struct {
@@ -837,6 +847,15 @@ type PlayersAddHandlerResult struct {
 	Players []PlayerDetail `json:"players"`
 }
 
+type PlayerAddRow struct {
+	ID             string `db:"id"`
+	TenantID       int64  `db:"tenant_id"`
+	DisplayName    string `db:"display_name"`
+	IsDisqualified bool   `db:"is_disqualified"`
+	CreatedAt      int64  `db:"created_at"`
+	UpdatedAt      int64  `db:"updated_at"`
+}
+
 // テナント管理者向けAPI
 // GET /api/organizer/players/add
 // テナントに参加者を追加する
@@ -862,33 +881,72 @@ func playersAddHandler(c echo.Context) error {
 	displayNames := params["display_name[]"]
 
 	pds := make([]PlayerDetail, 0, len(displayNames))
+
+	now := time.Now().Unix()
+	playerAddRows := make([]PlayerAddRow, 0, len(displayNames))
 	for _, displayName := range displayNames {
 		id, err := dispenseID(ctx)
 		if err != nil {
 			return fmt.Errorf("error dispenseID: %w", err)
 		}
-
-		now := time.Now().Unix()
-		if _, err := tenantDB.ExecContext(
-			ctx,
-			"INSERT INTO player (id, tenant_id, display_name, is_disqualified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-			id, v.tenantID, displayName, false, now, now,
-		); err != nil {
-			return fmt.Errorf(
-				"error Insert player at tenantDB: id=%s, displayName=%s, isDisqualified=%t, createdAt=%d, updatedAt=%d, %w",
-				id, displayName, false, now, now, err,
-			)
-		}
-		p, err := retrievePlayer(ctx, tenantDB, id)
-		if err != nil {
-			return fmt.Errorf("error retrievePlayer: %w", err)
-		}
-		pds = append(pds, PlayerDetail{
-			ID:             p.ID,
-			DisplayName:    p.DisplayName,
-			IsDisqualified: p.IsDisqualified,
+		playerAddRows = append(playerAddRows, PlayerAddRow{
+			ID:             id,
+			TenantID:       v.tenantID,
+			DisplayName:    displayName,
+			IsDisqualified: false,
+			CreatedAt:      now,
+			UpdatedAt:      now,
 		})
+		pds = append(pds, PlayerDetail{
+			ID:             id,
+			DisplayName:    displayName,
+			IsDisqualified: false,
+		})
+
 	}
+
+	// 長さ0ならアーリーリターン
+	if len(playerAddRows) == 0 {
+		res := PlayersAddHandlerResult{
+			Players: pds,
+		}
+		return c.JSON(http.StatusOK, SuccessResult{Status: true, Data: res})
+	}
+
+	if _, err := tenantDB.NamedExecContext(ctx,
+		"INSERT INTO player (id, tenant_id, display_name, is_disqualified, created_at, updated_at) VALUES (:id, :tenant_id, :display_name, :is_disqualified, :created_at, :updated_at)", playerAddRows); err != nil {
+		return fmt.Errorf(
+			"error Insert player at tenantDB %+v, error: %w", playerAddRows, err,
+		)
+	}
+
+	//for _, displayName := range displayNames {
+	//	id, err := dispenseID(ctx)
+	//	if err != nil {
+	//		return fmt.Errorf("error dispenseID: %w", err)
+	//	}
+	//
+	//	now := time.Now().Unix()
+	//	if _, err := tenantDB.ExecContext(
+	//		ctx,
+	//		"INSERT INTO player (id, tenant_id, display_name, is_disqualified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+	//		id, v.tenantID, displayName, false, now, now,
+	//	); err != nil {
+	//		return fmt.Errorf(
+	//			"error Insert player at tenantDB: id=%s, displayName=%s, isDisqualified=%t, createdAt=%d, updatedAt=%d, %w",
+	//			id, displayName, false, now, now, err,
+	//		)
+	//	}
+	//	//p, err := retrievePlayer(ctx, tenantDB, id)
+	//	if err != nil {
+	//		return fmt.Errorf("error retrievePlayer: %w", err)
+	//	}
+	//	pds = append(pds, PlayerDetail{
+	//		ID:             id,
+	//		DisplayName:    displayName,
+	//		IsDisqualified: false,
+	//	})
+	//}
 
 	res := PlayersAddHandlerResult{
 		Players: pds,
@@ -1357,18 +1415,9 @@ func playerHandler(c echo.Context) error {
 		ctx,
 		&psds,
 		`
-SELECT competition.title, ranking.score
-FROM (SELECT *,
-             rank() OVER (
-                 partition by competition_id
-                 ORDER BY row_num DESC
-                 ) as rank
-      FROM player_score
-      WHERE tenant_id = $1
-        AND player_id = $2
-       ) AS ranking
-         INNER JOIN competition ON ranking.competition_id = competition.id
-WHERE rank = 1;
+SELECT competition.title, player_score.score FROM player_score
+  INNER JOIN competition ON player_score.competition_id = competition.id
+  WHERE player_score.tenant_id = $1 AND player_score.player_id = $2
 `,
 		v.tenantID,
 		playerID,
@@ -1485,21 +1534,12 @@ func competitionRankingHandler(c echo.Context) error {
 		ctx,
 		&crs,
 		`
-SELECT
-    ranking.player_id,
-    ranking.score,
-    player.display_name
-FROM (SELECT *,
-             rank() OVER (
-                 partition by player_id
-                 ORDER BY row_num DESC
-                 ) as rank
-      FROM player_score
-      WHERE tenant_id = $1
-            AND competition_id = $2) AS ranking
-         INNER JOIN player ON ranking.player_id = player.id
-WHERE rank = 1
-ORDER BY score DESC LIMIT $3 OFFSET $4;
+SELECT player_id, score, display_name
+FROM player_score
+         INNER JOIN player p on player_score.player_id = p.id
+WHERE player_score.tenant_id = $1
+  AND competition_id = $2
+  ORDER BY score DESC LIMIT $3 OFFSET $4;
 `,
 		tenant.ID,
 		competitionID,
