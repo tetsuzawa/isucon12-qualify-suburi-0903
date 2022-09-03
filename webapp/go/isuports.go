@@ -872,14 +872,6 @@ func playersAddHandler(c echo.Context) error {
 
 	pds := make([]PlayerDetail, 0, len(displayNames))
 
-	// 長さ0ならアーリーリターン
-	if len(displayNames) == 0 {
-		res := PlayersAddHandlerResult{
-			Players: pds,
-		}
-		return c.JSON(http.StatusOK, SuccessResult{Status: true, Data: res})
-	}
-
 	now := time.Now().Unix()
 	playerAddRows := make([]PlayerAddRow, 0, len(displayNames))
 	for i := range playerAddRows {
@@ -901,6 +893,14 @@ func playersAddHandler(c echo.Context) error {
 			IsDisqualified: false,
 		})
 
+	}
+
+	// 長さ0ならアーリーリターン
+	if len(playerAddRows) == 0 {
+		res := PlayersAddHandlerResult{
+			Players: pds,
+		}
+		return c.JSON(http.StatusOK, SuccessResult{Status: true, Data: res})
 	}
 
 	if _, err := tenantDB.NamedExecContext(ctx,
