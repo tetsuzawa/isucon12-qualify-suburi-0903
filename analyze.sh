@@ -28,8 +28,8 @@ sudo alp ltsv --file=${nginx_access_log} \
   > ${result_dir}/alp.md
 
 # mysqlowquery
-sudo mysqldumpslow -s t ${mysql_slow_log} > ${result_dir}/mysqld-slow.txt
+# sudo mysqldumpslow -s t ${mysql_slow_log} > ${result_dir}/mysqld-slow.txt
 
 # pt-query-digest
-pt-query-digest --explain "h=${MYSQL_HOST},u=${MYSQL_USER},p=${MYSQL_PASS},D=${MYSQL_DBNAME}" ${mysql_slow_log} \
-  > ${result_dir}/pt-query-digest.txt
+# pt-query-digest --explain "h=${MYSQL_HOST},u=${MYSQL_USER},p=${MYSQL_PASS},D=${MYSQL_DBNAME}" ${mysql_slow_log} \
+#   > ${result_dir}/pt-query-digest.txt
