@@ -496,25 +496,20 @@ func tenantsAddHandler(c echo.Context) error {
 
 	ctx := context.Background()
 	now := time.Now().Unix()
-	//insertRes, err := adminDB.QueryRowContext(
 
-	tx, err := adminDB.BeginTxx(ctx, nil)
+	id, err := idGenerator.NextID()
 	if err != nil {
-		return fmt.Errorf("failed to start tx %w", err)
+		return fmt.Errorf("idGenerator.NextID()")
+	}
+	if err := createTenantDB(int64(id)); err != nil {
+		return fmt.Errorf("error createTenantDB: id=%d name=%s %w", id, name, err)
 	}
 
-	_, err = tx.ExecContext(ctx, "LOCK TABLE tenant IN EXCLUSIVE MODE")
-	if err != nil {
-		return fmt.Errorf("failed to exec lock %w", err)
-	}
-
-	row := tx.QueryRowContext(
+	if _, err := adminDB.ExecContext(
 		ctx,
-		"INSERT INTO tenant (name, display_name, created_at, updated_at) VALUES (?, ?, ?, ?) RETURNING id",
-		name, displayName, now, now,
-	)
-	var id int64
-	if err := row.Scan(&id); err != nil {
+		"INSERT INTO tenant (id, name, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		id, name, displayName, now, now,
+	); err != nil {
 		//if merr, ok := err.(*mysql.MySQLError); ok && merr.Number == 1062 { // duplicate entry
 		//	return echo.NewHTTPError(http.StatusBadRequest, "duplicate tenant")
 		//}
@@ -538,17 +533,10 @@ func tenantsAddHandler(c echo.Context) error {
 	// NOTE: 先にadminDBに書き込まれることでこのAPIの処理中に
 	//       /api/admin/tenants/billingにアクセスされるとエラーになりそう
 	//       ロックなどで対処したほうが良さそう
-	if err := createTenantDB(id); err != nil {
-		return fmt.Errorf("error createTenantDB: id=%d name=%s %w", id, name, err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failld to commit")
-	}
 
 	res := TenantsAddHandlerResult{
 		Tenant: TenantWithBilling{
-			ID:          strconv.FormatInt(id, 10),
+			ID:          strconv.FormatUint(id, 10),
 			Name:        name,
 			DisplayName: displayName,
 			BillingYen:  0,
@@ -589,7 +577,7 @@ type VisitHistorySummaryRow struct {
 }
 
 // 大会ごとの課金レポートを計算する
-func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, adminDB dbOrTx, tenantID int64, competitonID string) (*BillingReport, error) {
+func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID int64, competitonID string) (*BillingReport, error) {
 	comp, err := retrieveCompetition(ctx, tenantDB, competitonID)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieveCompetition: %w", err)
@@ -710,16 +698,7 @@ func tenantsBillingHandler(c echo.Context) error {
 	// テナントの課金とする
 	ts := []TenantRow{}
 
-	tx, err := adminDB.BeginTxx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to start tx %w", err)
-	}
-	_, err = tx.ExecContext(ctx, "LOCK TABLE tenant IN EXCLUSIVE MODE ")
-	if err != nil {
-		return fmt.Errorf("failed to lock %w", err)
-	}
-
-	if err := tx.SelectContext(ctx, &ts, "SELECT * FROM tenant ORDER BY id DESC"); err != nil {
+	if err := adminDB.SelectContext(ctx, &ts, "SELECT * FROM tenant ORDER BY id DESC"); err != nil {
 		//if err := adminDB.SelectContext(ctx, &ts, "SELECT * FROM tenant ORDER BY id DESC"); err != nil {
 		return fmt.Errorf("error Select tenant: %w", err)
 	}
@@ -750,7 +729,7 @@ func tenantsBillingHandler(c echo.Context) error {
 				return fmt.Errorf("failed to Select competition: %w", err)
 			}
 			for _, comp := range cs {
-				report, err := billingReportByCompetition(ctx, tenantDB, tx, t.ID, comp.ID)
+				report, err := billingReportByCompetition(ctx, tenantDB, t.ID, comp.ID)
 				if err != nil {
 					return fmt.Errorf("failed to billingReportByCompetition: %w", err)
 				}
@@ -766,7 +745,6 @@ func tenantsBillingHandler(c echo.Context) error {
 			break
 		}
 	}
-	tx.Commit()
 	return c.JSON(http.StatusOK, SuccessResult{
 		Status: true,
 		Data: TenantsBillingHandlerResult{
@@ -1240,7 +1218,7 @@ func billingHandler(c echo.Context) error {
 	}
 	tbrs := make([]BillingReport, 0, len(cs))
 	for _, comp := range cs {
-		report, err := billingReportByCompetition(ctx, tenantDB, adminDB, v.tenantID, comp.ID)
+		report, err := billingReportByCompetition(ctx, tenantDB, v.tenantID, comp.ID)
 		if err != nil {
 			return fmt.Errorf("error billingReportByCompetition: %w", err)
 		}
