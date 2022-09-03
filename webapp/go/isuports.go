@@ -1100,6 +1100,7 @@ func competitionScoreHandler(c echo.Context) error {
 		return fmt.Errorf("error tenantDB.BeginTxx: %w", err)
 	}
 	var rowNum int64
+	var validCsvRowNum int64
 	//playerScoreRows := []PlayerScoreRow{}
 
 	// key : player_id
@@ -1167,6 +1168,7 @@ func competitionScoreHandler(c echo.Context) error {
 			CreatedAt:     now,
 			UpdatedAt:     now,
 		}
+		validCsvRowNum++
 	}
 
 	playerScoreRows := make([]PlayerScoreRow, 0, len(playerScoreMap))
@@ -1204,7 +1206,7 @@ func competitionScoreHandler(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, SuccessResult{
 		Status: true,
-		Data:   ScoreHandlerResult{Rows: rowNum},
+		Data:   ScoreHandlerResult{Rows: validCsvRowNum},
 	})
 }
 
