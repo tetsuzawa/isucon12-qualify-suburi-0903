@@ -770,7 +770,7 @@ func tenantsBillingHandler(c echo.Context) error {
 		tenantBillings = append(tenantBillings, tb)
 	}
 	sort.Slice(tenantBillings, func(i, j int) bool {
-		return tenantBillings[i].IDInt < tenantBillings[j].IDInt
+		return tenantBillings[i].IDInt > tenantBillings[j].IDInt
 	})
 
 	return c.JSON(http.StatusOK, SuccessResult{
