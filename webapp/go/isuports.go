@@ -159,7 +159,7 @@ func SetCacheControlPrivate(next echo.HandlerFunc) echo.HandlerFunc {
 // Run は cmd/isuports/main.go から呼ばれるエントリーポイントです
 func Run() {
 	e := echo.New()
-	e.Debug = true
+	//e.Debug = true
 	e.Logger.SetLevel(log.DEBUG)
 
 	var (
@@ -176,7 +176,7 @@ func Run() {
 	}
 	defer sqlLogger.Close()
 
-	e.Use(middleware.Logger())
+	//e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(SetCacheControlPrivate)
 
@@ -517,7 +517,7 @@ func tenantsAddHandler(c echo.Context) error {
 		//	return echo.NewHTTPError(http.StatusBadRequest, "duplicate tenant")
 		//}
 		if strings.Contains(err.Error(), "duplicate key value violates") {
-			log.Printf("duplicate error: name: %v, display_name %v, err: %+v", name, displayName, err)
+			//log.Printf("duplicate error: name: %v, display_name %v, err: %+v", name, displayName, err)
 			return echo.NewHTTPError(http.StatusBadRequest, "duplicate tenant")
 		}
 		return fmt.Errorf(
@@ -525,7 +525,7 @@ func tenantsAddHandler(c echo.Context) error {
 			name, displayName, now, now, err,
 		)
 	}
-	log.Printf("returned id :%v", id)
+	//log.Printf("returned id :%v", id)
 
 	// postgres ではいらない
 	//id, err := insertRes.LastInsertId()
@@ -728,7 +728,7 @@ func tenantsBillingHandler(c echo.Context) error {
 				"SELECT * FROM competition WHERE tenant_id=?",
 				t.ID,
 			); err != nil {
-				log.Printf("failed to Select competition no tenantID: %v", t.ID)
+				//log.Printf("failed to Select competition no tenantID: %v", t.ID)
 				return fmt.Errorf("failed to Select competition: %w", err)
 			}
 			for _, comp := range cs {
