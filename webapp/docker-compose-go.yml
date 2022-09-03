@@ -6,9 +6,11 @@ services:
       # postgres
       ISUCON_DB_HOST: 192.168.0.13
       ISUCON_DB_PORT: 3306
-      ISUCON_DB_USER: isucon
-      ISUCON_DB_PASSWORD: isucon
-      ISUCON_DB_NAME: isuports
+      #      ISUCON_DB_USER: isucon
+      ISUCON_DB_USER: postgres
+      ISUCON_DB_PASSWORD:
+      #      ISUCON_DB_NAME: isuports
+      ISUCON_DB_NAME: postgres
     network_mode: host
     volumes:
       - /home/isucon/webapp/tenant_db:/home/isucon/webapp/tenant_db
