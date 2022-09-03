@@ -1296,6 +1296,7 @@ func competitionScoreHandler(c echo.Context) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("error tx.Commit: %w", err)
 	}
+	rankingCache.Delete(competitionID)
 
 	return c.JSON(http.StatusOK, SuccessResult{
 		Status: true,
@@ -1459,6 +1460,8 @@ type CompetitionRankingHandlerResult struct {
 	Ranks       []CompetitionRank `json:"ranks"`
 }
 
+var rankingCache sync.Map
+
 // 参加者向けAPI
 // GET /api/player/competition/:competition_id/ranking
 // 大会ごとのランキングを取得する
@@ -1494,6 +1497,21 @@ func competitionRankingHandler(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusNotFound, "competition not found")
 		}
 		return fmt.Errorf("error retrieveCompetition: %w", err)
+	}
+
+	if cache, ok := rankingCache.Load(competitionID); ok {
+		res := SuccessResult{
+			Status: true,
+			Data: CompetitionRankingHandlerResult{
+				Competition: CompetitionDetail{
+					ID:         competition.ID,
+					Title:      competition.Title,
+					IsFinished: competition.FinishedAt.Valid,
+				},
+				Ranks: cache.([]CompetitionRank),
+			},
+		}
+		return c.JSON(http.StatusOK, res)
 	}
 
 	tx, err := adminDB.BeginTxx(ctx, nil)
@@ -1568,6 +1586,7 @@ WHERE player_score.tenant_id = $1
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("error tx.Commit: %w", err)
 	}
+	rankingCache.Store(competitionID, pagedRanks)
 
 	res := SuccessResult{
 		Status: true,
