@@ -17,3 +17,36 @@ create table if not exists visit_history
     created_at     bigint,
     updated_at     bigint
 );
+
+-- sqlite to pg
+CREATE TABLE competition
+(
+    id          varchar(255) not null,
+    tenant_id   bigint       not null,
+    title       text         not null,
+    finished_at bigint,
+    created_at  bigint       not null,
+    updated_at  bigint       not null
+);
+
+CREATE TABLE player
+(
+    id              varchar(255) not null,
+    tenant_id       bigint       not null,
+    display_name    text         not null,
+    is_disqualified boolean      not null,
+    created_at      bigint       not null,
+    updated_at      bigint       not null
+);
+
+CREATE TABLE player_score
+(
+    id             varchar(255) not null,
+    tenant_id      bigint       not null,
+    player_id      varchar(255) not null,
+    competition_id varchar(255) not null,
+    score          bigint       not null,
+    row_num        bigint       not null,
+    created_at     bigint       not null,
+    updated_at     bigint       not null
+);
