@@ -874,7 +874,7 @@ func playersAddHandler(c echo.Context) error {
 
 	now := time.Now().Unix()
 	playerAddRows := make([]PlayerAddRow, 0, len(displayNames))
-	for i := range playerAddRows {
+	for _, displayName := range displayNames {
 		id, err := dispenseID(ctx)
 		if err != nil {
 			return fmt.Errorf("error dispenseID: %w", err)
@@ -882,14 +882,14 @@ func playersAddHandler(c echo.Context) error {
 		playerAddRows = append(playerAddRows, PlayerAddRow{
 			ID:             id,
 			TenantID:       v.tenantID,
-			DisplayName:    displayNames[i],
+			DisplayName:    displayName,
 			IsDisqualified: false,
 			CreatedAt:      now,
 			UpdatedAt:      now,
 		})
 		pds = append(pds, PlayerDetail{
 			ID:             id,
-			DisplayName:    displayNames[i],
+			DisplayName:    displayName,
 			IsDisqualified: false,
 		})
 
