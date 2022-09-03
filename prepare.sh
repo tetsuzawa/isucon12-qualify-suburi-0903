@@ -23,7 +23,7 @@ EOF
 
 
 # ====== go ======
-#make -C webapp/go isuports
+make -C webapp/go isuports
 sudo systemctl restart isuports.service
 
 # ====== nginx ======
