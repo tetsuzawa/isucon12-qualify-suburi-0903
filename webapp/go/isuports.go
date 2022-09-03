@@ -522,6 +522,7 @@ func tenantsAddHandler(c echo.Context) error {
 			name, displayName, now, now, err,
 		)
 	}
+	log.Printf("returned id :%v", id)
 
 	// postgres ではいらない
 	//id, err := insertRes.LastInsertId()
