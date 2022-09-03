@@ -1125,7 +1125,11 @@ func competitionScoreHandler(c echo.Context) error {
 		return fmt.Errorf("error tenantDB.BeginTxx: %w", err)
 	}
 	var rowNum int64
-	playerScoreRows := []PlayerScoreRow{}
+	var validCsvRowNum int64
+	//playerScoreRows := []PlayerScoreRow{}
+
+	// key : player_id
+	playerScoreMap := make(map[string]PlayerScoreRow)
 	for {
 		rowNum++
 		row, err := r.Read()
@@ -1167,7 +1171,18 @@ func competitionScoreHandler(c echo.Context) error {
 			return fmt.Errorf("error dispenseID: %w", err)
 		}
 		now := time.Now().Unix()
-		playerScoreRows = append(playerScoreRows, PlayerScoreRow{
+
+		//playerScoreRows = append(playerScoreRows, PlayerScoreRow{
+		//	ID:            id,
+		//	TenantID:      v.tenantID,
+		//	PlayerID:      playerID,
+		//	CompetitionID: competitionID,
+		//	Score:         score,
+		//	RowNum:        rowNum,
+		//	CreatedAt:     now,
+		//	UpdatedAt:     now,
+		//})
+		playerScoreMap[playerID] = PlayerScoreRow{
 			ID:            id,
 			TenantID:      v.tenantID,
 			PlayerID:      playerID,
@@ -1176,7 +1191,13 @@ func competitionScoreHandler(c echo.Context) error {
 			RowNum:        rowNum,
 			CreatedAt:     now,
 			UpdatedAt:     now,
-		})
+		}
+		validCsvRowNum++
+	}
+
+	playerScoreRows := make([]PlayerScoreRow, 0, len(playerScoreMap))
+	for _, playerScoreRow := range playerScoreMap {
+		playerScoreRows = append(playerScoreRows, playerScoreRow)
 	}
 
 	if _, err := tx.ExecContext(
@@ -1188,19 +1209,23 @@ func competitionScoreHandler(c echo.Context) error {
 		tx.Rollback()
 		return fmt.Errorf("error Delete player_score: tenantID=%d, competitionID=%s, %w", v.tenantID, competitionID, err)
 	}
-	for _, ps := range playerScoreRows {
-		if _, err := tx.NamedExecContext(
-			ctx,
-			"INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES (:id, :tenant_id, :player_id, :competition_id, :score, :row_num, :created_at, :updated_at)",
-			ps,
-		); err != nil {
-			tx.Rollback()
-			return fmt.Errorf(
-				"error Insert player_score: id=%s, tenant_id=%d, playerID=%s, competitionID=%s, score=%d, rowNum=%d, createdAt=%d, updatedAt=%d, %w",
-				ps.ID, ps.TenantID, ps.PlayerID, ps.CompetitionID, ps.Score, ps.RowNum, ps.CreatedAt, ps.UpdatedAt, err,
-			)
-
-		}
+	//for _, ps := range playerScoreRows {
+	//	if _, err := tx.NamedExecContext(
+	//		ctx,
+	//		"INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES (:id, :tenant_id, :player_id, :competition_id, :score, :row_num, :created_at, :updated_at)",
+	//		ps,
+	//	); err != nil {
+	//		tx.Rollback()
+	//		return fmt.Errorf(
+	//			"error Insert player_score: id=%s, tenant_id=%d, playerID=%s, competitionID=%s, score=%d, rowNum=%d, createdAt=%d, updatedAt=%d, %w",
+	//			ps.ID, ps.TenantID, ps.PlayerID, ps.CompetitionID, ps.Score, ps.RowNum, ps.CreatedAt, ps.UpdatedAt, err,
+	//		)
+	//
+	//	}
+	//}
+	_, err = tx.NamedExecContext(ctx, "INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES (:id, :tenant_id, :player_id, :competition_id, :score, :row_num, :created_at, :updated_at)", playerScoreRows)
+	if err != nil {
+		return fmt.Errorf("named exec error: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -1209,7 +1234,7 @@ func competitionScoreHandler(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, SuccessResult{
 		Status: true,
-		Data:   ScoreHandlerResult{Rows: int64(len(playerScoreRows))},
+		Data:   ScoreHandlerResult{Rows: validCsvRowNum},
 	})
 }
 
