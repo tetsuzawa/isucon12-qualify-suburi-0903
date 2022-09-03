@@ -1404,6 +1404,7 @@ func competitionRankingHandler(c echo.Context) error {
 	now := time.Now().Unix()
 	var tenant TenantRow
 	if err := tx.GetContext(ctx, &tenant, "SELECT * FROM tenant WHERE id = ?", v.tenantID); err != nil {
+		tx.Rollback()
 		return fmt.Errorf("error Select tenant: id=%d, %w", v.tenantID, err)
 	}
 
@@ -1412,6 +1413,7 @@ func competitionRankingHandler(c echo.Context) error {
 		"INSERT INTO visit_history (player_id, tenant_id, competition_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
 		v.playerID, tenant.ID, competitionID, now, now,
 	); err != nil {
+		tx.Rollback()
 		return fmt.Errorf(
 			"error Insert visit_history: playerID=%s, tenantID=%d, competitionID=%s, createdAt=%d, updatedAt=%d, %w",
 			v.playerID, tenant.ID, competitionID, now, now, err,
@@ -1422,6 +1424,7 @@ func competitionRankingHandler(c echo.Context) error {
 	rankAfterStr := c.QueryParam("rank_after")
 	if rankAfterStr != "" {
 		if rankAfter, err = strconv.ParseInt(rankAfterStr, 10, 64); err != nil {
+			tx.Rollback()
 			return fmt.Errorf("error strconv.ParseUint: rankAfterStr=%s, %w", rankAfterStr, err)
 		}
 	}
@@ -1440,6 +1443,7 @@ func competitionRankingHandler(c echo.Context) error {
 		tenant.ID,
 		competitionID,
 	); err != nil {
+		tx.Rollback()
 		return fmt.Errorf("error Select player_score: tenantID=%d, competitionID=%s, %w", tenant.ID, competitionID, err)
 	}
 	ranks := make([]CompetitionRank, 0, len(pss))
@@ -1453,6 +1457,7 @@ func competitionRankingHandler(c echo.Context) error {
 		scoredPlayerSet[ps.PlayerID] = struct{}{}
 		p, err := retrievePlayer(ctx, tx, ps.PlayerID)
 		if err != nil {
+			tx.Rollback()
 			return fmt.Errorf("error retrievePlayer: %w", err)
 		}
 		ranks = append(ranks, CompetitionRank{
@@ -1482,6 +1487,9 @@ func competitionRankingHandler(c echo.Context) error {
 		if len(pagedRanks) >= 100 {
 			break
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error tx.Commit: %w", err)
 	}
 
 	res := SuccessResult{
