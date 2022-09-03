@@ -28,6 +28,8 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
+
+	_ "github.com/mackee/pgx-replaced"
 )
 
 const (
@@ -59,16 +61,41 @@ func getEnv(key string, defaultValue string) string {
 }
 
 // 管理用DBに接続する
+//func connectAdminDB() (*sqlx.DB, error) {
+//	config := mysql.NewConfig()
+//	config.Net = "tcp"
+//	config.Addr = getEnv("ISUCON_DB_HOST", "127.0.0.1") + ":" + getEnv("ISUCON_DB_PORT", "3306")
+//	config.User = getEnv("ISUCON_DB_USER", "isucon")
+//	config.Passwd = getEnv("ISUCON_DB_PASSWORD", "isucon")
+//	config.DBName = getEnv("ISUCON_DB_NAME", "isuports")
+//	config.ParseTime = true
+//	dsn := config.FormatDSN()
+//	return sqlx.Open("mysql", dsn)
+//}
+
+// postgresql version
+// 管理用DBに接続する
 func connectAdminDB() (*sqlx.DB, error) {
-	config := mysql.NewConfig()
-	config.Net = "tcp"
-	config.Addr = getEnv("ISUCON_DB_HOST", "127.0.0.1") + ":" + getEnv("ISUCON_DB_PORT", "3306")
-	config.User = getEnv("ISUCON_DB_USER", "isucon")
-	config.Passwd = getEnv("ISUCON_DB_PASSWORD", "isucon")
-	config.DBName = getEnv("ISUCON_DB_NAME", "isuports")
-	config.ParseTime = true
-	dsn := config.FormatDSN()
-	return sqlx.Open("mysql", dsn)
+	//config := mysql.NewConfig()
+	//config.Net = "tcp"
+	//config.Addr = getEnv("ISUCON_DB_HOST", "127.0.0.1") + ":" + getEnv("ISUCON_DB_PORT", "3306")
+	//config.User = getEnv("ISUCON_DB_USER", "isucon")
+	//config.Passwd = getEnv("ISUCON_DB_PASSWORD", "isucon")
+	//config.DBName = getEnv("ISUCON_DB_NAME", "isuports")
+	//config.ParseTime = true
+	//dsn := config.FormatDSN()
+	host := getEnv("ISUCON_DB_HOST", "127.0.0.1") + ":"
+	port := getEnv("ISUCON_DB_PORT", "3306")
+	user := getEnv("ISUCON_DB_USER", "isucon")
+	pass := getEnv("ISUCON_DB_PASSWORD", "isucon")
+	dbName := getEnv("ISUCON_DB_NAME", "isuports")
+
+	db, err := sqlx.Open("pgx-replaced", fmt.Sprintf("postgres://%s:%s@%s:%v/%v", user, pass, host, port, dbName))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect postgre db: %w", err)
+	}
+	return db, err
 }
 
 // テナントDBのパスを返す
