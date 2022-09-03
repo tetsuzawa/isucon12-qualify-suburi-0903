@@ -1253,6 +1253,13 @@ func competitionScoreHandler(c echo.Context) error {
 		validCsvRowNum++
 	}
 
+	if len(playerScoreMap) == 0 {
+		return c.JSON(http.StatusOK, SuccessResult{
+			Status: true,
+			Data:   ScoreHandlerResult{Rows: validCsvRowNum},
+		})
+	}
+
 	playerScoreRows := make([]PlayerScoreRow, 0, len(playerScoreMap))
 	for _, playerScoreRow := range playerScoreMap {
 		playerScoreRows = append(playerScoreRows, playerScoreRow)
