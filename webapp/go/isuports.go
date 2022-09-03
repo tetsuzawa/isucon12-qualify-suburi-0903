@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -580,8 +581,14 @@ type VisitHistorySummaryRow struct {
 	MinCreatedAt int64  `db:"min_created_at"`
 }
 
+var billingCache sync.Map
+
 // 大会ごとの課金レポートを計算する
 func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID int64, competitonID string) (*BillingReport, error) {
+	_bil, ok := billingCache.Load(competitonID)
+	if ok {
+		return _bil.(*BillingReport), nil
+	}
 	comp, err := retrieveCompetition(ctx, tenantDB, competitonID)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieveCompetition: %w", err)
@@ -641,7 +648,7 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 			}
 		}
 	}
-	return &BillingReport{
+	bil := &BillingReport{
 		CompetitionID:     comp.ID,
 		CompetitionTitle:  comp.Title,
 		PlayerCount:       playerCount,
@@ -649,7 +656,10 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 		BillingPlayerYen:  100 * playerCount, // スコアを登録した参加者は100円
 		BillingVisitorYen: 10 * visitorCount, // ランキングを閲覧だけした(スコアを登録していない)参加者は10円
 		BillingYen:        100*playerCount + 10*visitorCount,
-	}, nil
+	}
+	billingCache.Store(competitonID, bil)
+
+	return bil, nil
 }
 
 type TenantWithBilling struct {
@@ -1405,18 +1415,9 @@ func playerHandler(c echo.Context) error {
 		ctx,
 		&psds,
 		`
-SELECT competition.title, ranking.score
-FROM (SELECT *,
-             rank() OVER (
-                 partition by competition_id
-                 ORDER BY row_num DESC
-                 ) as rank
-      FROM player_score
-      WHERE tenant_id = $1
-        AND player_id = $2
-       ) AS ranking
-         INNER JOIN competition ON ranking.competition_id = competition.id
-WHERE rank = 1;
+SELECT competition.title, player_score.score FROM player_score
+  INNER JOIN competition ON player_score.competition_id = competition.id
+  WHERE player_score.tenant_id = $1 AND player_score.player_id = $2
 `,
 		v.tenantID,
 		playerID,
@@ -1533,21 +1534,12 @@ func competitionRankingHandler(c echo.Context) error {
 		ctx,
 		&crs,
 		`
-SELECT
-    ranking.player_id,
-    ranking.score,
-    player.display_name
-FROM (SELECT *,
-             rank() OVER (
-                 partition by player_id
-                 ORDER BY row_num DESC
-                 ) as rank
-      FROM player_score
-      WHERE tenant_id = $1
-            AND competition_id = $2) AS ranking
-         INNER JOIN player ON ranking.player_id = player.id
-WHERE rank = 1
-ORDER BY score DESC LIMIT $3 OFFSET $4;
+SELECT player_id, score, display_name
+FROM player_score
+         INNER JOIN player p on player_score.player_id = p.id
+WHERE player_score.tenant_id = $1
+  AND competition_id = $2
+  ORDER BY score DESC LIMIT $3 OFFSET $4;
 `,
 		tenant.ID,
 		competitionID,
