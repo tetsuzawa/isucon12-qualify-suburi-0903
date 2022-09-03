@@ -1156,6 +1156,7 @@ func competitionScoreHandler(c echo.Context) error {
 		//	CreatedAt:     now,
 		//	UpdatedAt:     now,
 		//})
+		log.Printf("original insert rows: %v, this pr rows: %v", rowNum, len(playerScoreMap))
 		playerScoreMap[playerID] = PlayerScoreRow{
 			ID:            id,
 			TenantID:      v.tenantID,
