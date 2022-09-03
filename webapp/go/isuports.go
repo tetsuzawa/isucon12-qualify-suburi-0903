@@ -1442,27 +1442,23 @@ FROM (SELECT *,
             AND competition_id = $2) AS ranking
          INNER JOIN player ON ranking.player_id = player.id
 WHERE rank = 1
-ORDER BY score DESC ;
+ORDER BY score DESC LIMIT $3 OFFSET $4;
 `,
 		tenant.ID,
 		competitionID,
+		100,
+		rankAfter,
 	); err != nil {
 		return fmt.Errorf("error Select player_score: tenantID=%d, competitionID=%s, %w", tenant.ID, competitionID, err)
 	}
 	pagedRanks := make([]CompetitionRank, 0, 100)
 	for i, cr := range crs {
-		if int64(i) < rankAfter {
-			continue
-		}
 		pagedRanks = append(pagedRanks, CompetitionRank{
 			Rank:              int64(i + 1),
 			Score:             cr.Score,
 			PlayerID:          cr.PlayerID,
 			PlayerDisplayName: cr.PlayerDisplayName,
 		})
-		if len(pagedRanks) >= 100 {
-			break
-		}
 	}
 
 	res := SuccessResult{
