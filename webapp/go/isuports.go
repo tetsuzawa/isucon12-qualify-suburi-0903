@@ -703,7 +703,7 @@ func tenantsBillingHandler(c echo.Context) error {
 	// テナントの課金とする
 
 	var tenants []TenantRow
-	if beforeID == 0 {
+	if beforeID > 0 {
 		if err := adminDB.SelectContext(ctx, &tenants, "SELECT * FROM tenant WHERE id < $1 ORDER BY id DESC LIMIT 10", beforeID); err != nil {
 			return fmt.Errorf("error Select tenant: %w", err)
 		}
@@ -722,6 +722,14 @@ func tenantsBillingHandler(c echo.Context) error {
 			DisplayName: t.DisplayName,
 			BillingYen:  0,
 		}
+	}
+	if len(tenantIDs) == 0 {
+		return c.JSON(http.StatusOK, SuccessResult{
+			Status: true,
+			Data: TenantsBillingHandlerResult{
+				Tenants: []TenantWithBilling{},
+			},
+		})
 	}
 	var competitions []CompetitionRow
 	q, args, err := sqlx.In("SELECT * FROM competition WHERE tenant_id IN (?) ORDER BY tenant_id", tenantIDs)
