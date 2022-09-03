@@ -1119,6 +1119,7 @@ func competitionScoreHandler(c echo.Context) error {
 		if _, err := retrievePlayer(ctx, tx, playerID); err != nil {
 			// 存在しない参加者が含まれている
 			if errors.Is(err, sql.ErrNoRows) {
+				tx.Rollback()
 				return echo.NewHTTPError(
 					http.StatusBadRequest,
 					fmt.Sprintf("player not found: %s", playerID),
@@ -1436,7 +1437,7 @@ func competitionRankingHandler(c echo.Context) error {
 	//defer fl.Close()
 
 	crs := []CompetitionRank{}
-	if err := tenantDB.SelectContext(
+	if err := tx.SelectContext(
 		ctx,
 		&crs,
 		`
