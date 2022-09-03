@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -652,6 +653,7 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 }
 
 type TenantWithBilling struct {
+	IDInt       int64  `json:"-"`
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name"`
@@ -699,49 +701,70 @@ func tenantsBillingHandler(c echo.Context) error {
 	//     scoreが登録されていないplayerでアクセスした人 * 10
 	//   を合計したものを
 	// テナントの課金とする
-	ts := []TenantRow{}
 
-	if err := adminDB.SelectContext(ctx, &ts, "SELECT * FROM tenant WHERE id > $1 ORDER BY id DESC LIMIT 10"); err != nil {
-		//if err := adminDB.SelectContext(ctx, &ts, "SELECT * FROM tenant ORDER BY id DESC"); err != nil {
-		return fmt.Errorf("error Select tenant: %w", err)
+	var tenants []TenantRow
+	if beforeID == 0 {
+		if err := adminDB.SelectContext(ctx, &tenants, "SELECT * FROM tenant WHERE id < $1 ORDER BY id DESC LIMIT 10", beforeID); err != nil {
+			return fmt.Errorf("error Select tenant: %w", err)
+		}
+	} else {
+		if err := adminDB.SelectContext(ctx, &tenants, "SELECT id FROM tenant ORDER BY id DESC LIMIT 10", beforeID); err != nil {
+			return fmt.Errorf("error Select tenant: %w", err)
+		}
 	}
-	tenantBillings := make([]TenantWithBilling, 0, len(ts))
-	for _, t := range ts {
-		err := func(t TenantRow) error {
-			tb := TenantWithBilling{
-				ID:          strconv.FormatInt(t.ID, 10),
-				Name:        t.Name,
-				DisplayName: t.DisplayName,
+	tenantIDs := make([]int64, 0, len(tenants))
+	tenantBillingsMap := make(map[int64]TenantWithBilling, len(tenantIDs))
+	for _, t := range tenants {
+		tenantIDs = append(tenantIDs, t.ID)
+		tenantBillingsMap[t.ID] = TenantWithBilling{
+			IDInt:       t.ID,
+			Name:        t.Name,
+			DisplayName: t.DisplayName,
+			BillingYen:  0,
+		}
+	}
+	var competitions []CompetitionRow
+	q, args, err := sqlx.In("SELECT * FROM competition WHERE tenant_id IN (?) ORDER BY tenant_id", tenantIDs)
+	if err != nil {
+		return fmt.Errorf("build competition query: %w", err)
+	}
+	if err := adminDB.SelectContext(ctx, &competitions, q, args...); err != nil {
+		return fmt.Errorf("error Select competition: %w", err)
+	}
+
+	for _, c := range competitions {
+		err := func(c CompetitionRow) error {
+			if !c.FinishedAt.Valid {
+				return nil
 			}
-			tenantDB, err := connectToTenantDB(t.ID)
+			tenantDB, err := connectToTenantDB(c.TenantID)
 			if err != nil {
 				return fmt.Errorf("failed to connectToTenantDB: %w", err)
 			}
-			//defer tenantDB.Close()
-			cs := []CompetitionRow{}
-			if err := tenantDB.SelectContext(
-				ctx,
-				&cs,
-				"SELECT * FROM competition WHERE tenant_id=?",
-				t.ID,
-			); err != nil {
-				log.Printf("failed to Select competition no tenantID: %v", t.ID)
-				return fmt.Errorf("failed to Select competition: %w", err)
+			report, err := billingReportByCompetition(ctx, tenantDB, c.TenantID, c.ID)
+			if err != nil {
+				return fmt.Errorf("failed to billingReportByCompetition: %w", err)
 			}
-			for _, comp := range cs {
-				report, err := billingReportByCompetition(ctx, tenantDB, t.ID, comp.ID)
-				if err != nil {
-					return fmt.Errorf("failed to billingReportByCompetition: %w", err)
-				}
-				tb.BillingYen += report.BillingYen
-			}
-			tenantBillings = append(tenantBillings, tb)
+			tb := tenantBillingsMap[c.TenantID]
+			tb.BillingYen += report.BillingYen
+
+			tenantBillingsMap[c.TenantID] = tb
 			return nil
-		}(t)
+		}(c)
 		if err != nil {
 			return err
 		}
 	}
+
+	tenantBillings := make([]TenantWithBilling, 0, len(tenantBillingsMap))
+	for _, tb := range tenantBillingsMap {
+		tb.ID = strconv.FormatInt(tb.IDInt, 10)
+		tenantBillings = append(tenantBillings, tb)
+	}
+	sort.Slice(tenantBillings, func(i, j int) bool {
+		return tenantBillings[i].IDInt < tenantBillings[j].IDInt
+	})
+
 	return c.JSON(http.StatusOK, SuccessResult{
 		Status: true,
 		Data: TenantsBillingHandlerResult{
