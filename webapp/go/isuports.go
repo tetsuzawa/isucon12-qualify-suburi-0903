@@ -1100,7 +1100,11 @@ func competitionScoreHandler(c echo.Context) error {
 		return fmt.Errorf("error tenantDB.BeginTxx: %w", err)
 	}
 	var rowNum int64
-	playerScoreRows := []PlayerScoreRow{}
+	var validCsvRowNum int64
+	//playerScoreRows := []PlayerScoreRow{}
+
+	// key : player_id
+	playerScoreMap := make(map[string]PlayerScoreRow)
 	for {
 		rowNum++
 		row, err := r.Read()
@@ -1142,7 +1146,18 @@ func competitionScoreHandler(c echo.Context) error {
 			return fmt.Errorf("error dispenseID: %w", err)
 		}
 		now := time.Now().Unix()
-		playerScoreRows = append(playerScoreRows, PlayerScoreRow{
+
+		//playerScoreRows = append(playerScoreRows, PlayerScoreRow{
+		//	ID:            id,
+		//	TenantID:      v.tenantID,
+		//	PlayerID:      playerID,
+		//	CompetitionID: competitionID,
+		//	Score:         score,
+		//	RowNum:        rowNum,
+		//	CreatedAt:     now,
+		//	UpdatedAt:     now,
+		//})
+		playerScoreMap[playerID] = PlayerScoreRow{
 			ID:            id,
 			TenantID:      v.tenantID,
 			PlayerID:      playerID,
@@ -1151,7 +1166,13 @@ func competitionScoreHandler(c echo.Context) error {
 			RowNum:        rowNum,
 			CreatedAt:     now,
 			UpdatedAt:     now,
-		})
+		}
+		validCsvRowNum++
+	}
+
+	playerScoreRows := make([]PlayerScoreRow, 0, len(playerScoreMap))
+	for _, playerScoreRow := range playerScoreMap {
+		playerScoreRows = append(playerScoreRows, playerScoreRow)
 	}
 
 	if _, err := tx.ExecContext(
@@ -1184,7 +1205,7 @@ func competitionScoreHandler(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, SuccessResult{
 		Status: true,
-		Data:   ScoreHandlerResult{Rows: int64(len(playerScoreRows))},
+		Data:   ScoreHandlerResult{Rows: validCsvRowNum},
 	})
 }
 
