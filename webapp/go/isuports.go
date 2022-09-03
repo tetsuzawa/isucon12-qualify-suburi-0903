@@ -18,7 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/gofrs/flock"
 	"github.com/jmoiron/sqlx"
 	"github.com/kayac/go-katsubushi"
@@ -503,7 +502,10 @@ func tenantsAddHandler(c echo.Context) error {
 		name, displayName, now, now,
 	)
 	if err != nil {
-		if merr, ok := err.(*mysql.MySQLError); ok && merr.Number == 1062 { // duplicate entry
+		//if merr, ok := err.(*mysql.MySQLError); ok && merr.Number == 1062 { // duplicate entry
+		//	return echo.NewHTTPError(http.StatusBadRequest, "duplicate tenant")
+		//}
+		if strings.Contains(err.Error(), "duplicate key value violates") {
 			return echo.NewHTTPError(http.StatusBadRequest, "duplicate tenant")
 		}
 		return fmt.Errorf(
