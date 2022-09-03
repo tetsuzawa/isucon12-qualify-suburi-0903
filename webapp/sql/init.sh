@@ -20,7 +20,7 @@ psql -U"$ISUCON_DB_USER" \
 		-p"$ISUCON_DB_PASSWORD" \
 		--host "$ISUCON_DB_HOST" \
 		--port "$ISUCON_DB_PORT" \
-		-c init.sql \
+		-f init.sql \
 		"$ISUCON_DB_NAME"
 
 # SQLiteのデータベースを初期化
