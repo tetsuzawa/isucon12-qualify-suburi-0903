@@ -506,7 +506,7 @@ func tenantsAddHandler(c echo.Context) error {
 		//	return echo.NewHTTPError(http.StatusBadRequest, "duplicate tenant")
 		//}
 		if strings.Contains(err.Error(), "duplicate key value violates") {
-			log.Printf("duplicate error: name: %v, display_name %v", name, displayName)
+			log.Printf("duplicate error: name: %v, display_name %v, err: %+v", name, displayName, err)
 			return echo.NewHTTPError(http.StatusBadRequest, "duplicate tenant")
 		}
 		return fmt.Errorf(
