@@ -23,7 +23,7 @@ EOF
 
 
 # ====== go ======
-make -C webapp/go isuports
+#make -C webapp/go isuports
 sudo systemctl restart isuports.service
 
 # ====== nginx ======
@@ -38,8 +38,8 @@ sudo truncate -s 0 ${mysql_error_log}
 sudo systemctl restart mysql
 
 # slow log
-MYSQL="mysql -h${MYSQL_HOST} -P${MYSQL_PORT} -u${MYSQL_USER} -p${MYSQL_PASS} ${MYSQL_DBNAME}"
-${MYSQL} -e "set global slow_query_log_file = '${mysql_slow_log}'; set global long_query_time = 0; set global slow_query_log = ON;"
+#MYSQL="mysql -h${MYSQL_HOST} -P${MYSQL_PORT} -u${MYSQL_USER} -p${MYSQL_PASS} ${MYSQL_DBNAME}"
+#${MYSQL} -e "set global slow_query_log_file = '${mysql_slow_log}'; set global long_query_time = 0; set global slow_query_log = ON;"
 
 echo "OK"
 
