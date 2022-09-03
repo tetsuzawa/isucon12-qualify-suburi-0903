@@ -18,7 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/gofrs/flock"
 	"github.com/jmoiron/sqlx"
 	"github.com/kayac/go-katsubushi"
@@ -28,6 +27,8 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
+
+	_ "github.com/mackee/pgx-replaced"
 )
 
 const (
@@ -59,16 +60,41 @@ func getEnv(key string, defaultValue string) string {
 }
 
 // 管理用DBに接続する
+//func connectAdminDB() (*sqlx.DB, error) {
+//	config := mysql.NewConfig()
+//	config.Net = "tcp"
+//	config.Addr = getEnv("ISUCON_DB_HOST", "127.0.0.1") + ":" + getEnv("ISUCON_DB_PORT", "3306")
+//	config.User = getEnv("ISUCON_DB_USER", "isucon")
+//	config.Passwd = getEnv("ISUCON_DB_PASSWORD", "isucon")
+//	config.DBName = getEnv("ISUCON_DB_NAME", "isuports")
+//	config.ParseTime = true
+//	dsn := config.FormatDSN()
+//	return sqlx.Open("mysql", dsn)
+//}
+
+// postgresql version
+// 管理用DBに接続する
 func connectAdminDB() (*sqlx.DB, error) {
-	config := mysql.NewConfig()
-	config.Net = "tcp"
-	config.Addr = getEnv("ISUCON_DB_HOST", "127.0.0.1") + ":" + getEnv("ISUCON_DB_PORT", "3306")
-	config.User = getEnv("ISUCON_DB_USER", "isucon")
-	config.Passwd = getEnv("ISUCON_DB_PASSWORD", "isucon")
-	config.DBName = getEnv("ISUCON_DB_NAME", "isuports")
-	config.ParseTime = true
-	dsn := config.FormatDSN()
-	return sqlx.Open("mysql", dsn)
+	//config := mysql.NewConfig()
+	//config.Net = "tcp"
+	//config.Addr = getEnv("ISUCON_DB_HOST", "127.0.0.1") + ":" + getEnv("ISUCON_DB_PORT", "3306")
+	//config.User = getEnv("ISUCON_DB_USER", "isucon")
+	//config.Passwd = getEnv("ISUCON_DB_PASSWORD", "isucon")
+	//config.DBName = getEnv("ISUCON_DB_NAME", "isuports")
+	//config.ParseTime = true
+	//dsn := config.FormatDSN()
+	host := getEnv("ISUCON_DB_HOST", "127.0.0.1")
+	port := getEnv("ISUCON_DB_PORT", "3306")
+	user := getEnv("ISUCON_DB_USER", "isucon")
+	pass := getEnv("ISUCON_DB_PASSWORD", "isucon")
+	dbName := getEnv("ISUCON_DB_NAME", "isuports")
+
+	db, err := sqlx.Open("pgx-replaced", fmt.Sprintf("postgres://%s:%s@%s:%v/%v", user, pass, host, port, dbName))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect postgre db: %w", err)
+	}
+	return db, nil
 }
 
 // テナントDBのパスを返す
@@ -470,13 +496,25 @@ func tenantsAddHandler(c echo.Context) error {
 
 	ctx := context.Background()
 	now := time.Now().Unix()
-	insertRes, err := adminDB.ExecContext(
-		ctx,
-		"INSERT INTO tenant (name, display_name, created_at, updated_at) VALUES (?, ?, ?, ?)",
-		name, displayName, now, now,
-	)
+
+	id, err := idGenerator.NextID()
 	if err != nil {
-		if merr, ok := err.(*mysql.MySQLError); ok && merr.Number == 1062 { // duplicate entry
+		return fmt.Errorf("idGenerator.NextID()")
+	}
+	if err := createTenantDB(int64(id)); err != nil {
+		return fmt.Errorf("error createTenantDB: id=%d name=%s %w", id, name, err)
+	}
+
+	if _, err := adminDB.ExecContext(
+		ctx,
+		"INSERT INTO tenant (id, name, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		id, name, displayName, now, now,
+	); err != nil {
+		//if merr, ok := err.(*mysql.MySQLError); ok && merr.Number == 1062 { // duplicate entry
+		//	return echo.NewHTTPError(http.StatusBadRequest, "duplicate tenant")
+		//}
+		if strings.Contains(err.Error(), "duplicate key value violates") {
+			log.Printf("duplicate error: name: %v, display_name %v, err: %+v", name, displayName, err)
 			return echo.NewHTTPError(http.StatusBadRequest, "duplicate tenant")
 		}
 		return fmt.Errorf(
@@ -484,21 +522,21 @@ func tenantsAddHandler(c echo.Context) error {
 			name, displayName, now, now, err,
 		)
 	}
+	log.Printf("returned id :%v", id)
 
-	id, err := insertRes.LastInsertId()
-	if err != nil {
-		return fmt.Errorf("error get LastInsertId: %w", err)
-	}
+	// postgres ではいらない
+	//id, err := insertRes.LastInsertId()
+	//if err != nil {
+	//	return fmt.Errorf("error get LastInsertId: %w", err)
+	//}
+
 	// NOTE: 先にadminDBに書き込まれることでこのAPIの処理中に
 	//       /api/admin/tenants/billingにアクセスされるとエラーになりそう
 	//       ロックなどで対処したほうが良さそう
-	if err := createTenantDB(id); err != nil {
-		return fmt.Errorf("error createTenantDB: id=%d name=%s %w", id, name, err)
-	}
 
 	res := TenantsAddHandlerResult{
 		Tenant: TenantWithBilling{
-			ID:          strconv.FormatInt(id, 10),
+			ID:          strconv.FormatUint(id, 10),
 			Name:        name,
 			DisplayName: displayName,
 			BillingYen:  0,
@@ -659,7 +697,9 @@ func tenantsBillingHandler(c echo.Context) error {
 	//   を合計したものを
 	// テナントの課金とする
 	ts := []TenantRow{}
+
 	if err := adminDB.SelectContext(ctx, &ts, "SELECT * FROM tenant ORDER BY id DESC"); err != nil {
+		//if err := adminDB.SelectContext(ctx, &ts, "SELECT * FROM tenant ORDER BY id DESC"); err != nil {
 		return fmt.Errorf("error Select tenant: %w", err)
 	}
 	tenantBillings := make([]TenantWithBilling, 0, len(ts))
@@ -685,6 +725,7 @@ func tenantsBillingHandler(c echo.Context) error {
 				"SELECT * FROM competition WHERE tenant_id=?",
 				t.ID,
 			); err != nil {
+				log.Printf("failed to Select competition no tenantID: %v", t.ID)
 				return fmt.Errorf("failed to Select competition: %w", err)
 			}
 			for _, comp := range cs {
