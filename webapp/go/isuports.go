@@ -1369,7 +1369,7 @@ func playerHandler(c echo.Context) error {
 		`
 SELECT competition.title, player_score.score FROM player_score
   INNER JOIN competition ON player_score.competition_id = competition.id
-  WHERE tenant_id = $1 AND player_id = $2
+  WHERE player_score.tenant_id = $1 AND player_score.player_id = $2
 `,
 		v.tenantID,
 		playerID,
