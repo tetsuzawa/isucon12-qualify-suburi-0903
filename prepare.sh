@@ -19,7 +19,7 @@ result_dir="/home/isucon/result"
 EOF
 
 . /tmp/prepared_env
-. ./isuports.env
+. ./env.sh
 
 
 # ====== go ======
@@ -33,9 +33,9 @@ sudo nginx -t
 sudo systemctl restart nginx
 
 # ====== mysql ======
-sudo truncate -s 0 ${mysql_slow_log}
-sudo truncate -s 0 ${mysql_error_log}
-sudo systemctl restart mysql
+# sudo truncate -s 0 ${mysql_slow_log}
+# sudo truncate -s 0 ${mysql_error_log}
+# sudo systemctl restart mysql
 
 # slow log
 #MYSQL="mysql -h${MYSQL_HOST} -P${MYSQL_PORT} -u${MYSQL_USER} -p${MYSQL_PASS} ${MYSQL_DBNAME}"
