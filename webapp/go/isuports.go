@@ -1787,5 +1787,8 @@ func initializeHandler(c echo.Context) error {
 	res := InitializeHandlerResult{
 		Lang: "go",
 	}
+	rankingCache = sync.Map{}
+	billingCache = sync.Map{}
+
 	return c.JSON(http.StatusOK, SuccessResult{Status: true, Data: res})
 }
