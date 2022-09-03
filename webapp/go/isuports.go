@@ -1454,7 +1454,7 @@ ORDER BY score DESC LIMIT $3 OFFSET $4;
 	pagedRanks := make([]CompetitionRank, 0, 100)
 	for i, cr := range crs {
 		pagedRanks = append(pagedRanks, CompetitionRank{
-			Rank:              int64(i + 1),
+			Rank:              rankAfter + int64(i+1),
 			Score:             cr.Score,
 			PlayerID:          cr.PlayerID,
 			PlayerDisplayName: cr.PlayerDisplayName,
