@@ -17,8 +17,8 @@ ISUCON_DB_NAME=${ISUCON_DB_NAME:-isuports}
 #		--port "$ISUCON_DB_PORT" \
 #		"$ISUCON_DB_NAME" < init.sql
 
-psql -U"$ISUCON_DB_USER" \
-		-p"$ISUCON_DB_PASSWORD" \
+psql -U "$ISUCON_DB_USER" \
+		-p "$ISUCON_DB_PASSWORD" \
 		--host "$ISUCON_DB_HOST" \
 		--port "$ISUCON_DB_PORT" \
 		-f init.sql \
