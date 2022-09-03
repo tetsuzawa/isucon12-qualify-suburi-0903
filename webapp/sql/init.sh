@@ -10,11 +10,18 @@ ISUCON_DB_PASSWORD=${ISUCON_DB_PASSWORD:-isucon}
 ISUCON_DB_NAME=${ISUCON_DB_NAME:-isuports}
 
 # MySQLを初期化
-mysql -u"$ISUCON_DB_USER" \
+#mysql -u"$ISUCON_DB_USER" \
+#		-p"$ISUCON_DB_PASSWORD" \
+#		--host "$ISUCON_DB_HOST" \
+#		--port "$ISUCON_DB_PORT" \
+#		"$ISUCON_DB_NAME" < init.sql
+
+psql -U"$ISUCON_DB_USER" \
 		-p"$ISUCON_DB_PASSWORD" \
 		--host "$ISUCON_DB_HOST" \
 		--port "$ISUCON_DB_PORT" \
-		"$ISUCON_DB_NAME" < init.sql
+		-c init.sql \
+		"$ISUCON_DB_NAME"
 
 # SQLiteのデータベースを初期化
 rm -f ../tenant_db/*.db
