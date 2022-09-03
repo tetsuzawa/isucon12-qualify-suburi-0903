@@ -103,25 +103,29 @@ func tenantDBPath(id int64) string {
 }
 
 // テナントDBに接続する
+//func connectToTenantDB(id int64) (*sqlx.DB, error) {
+//	p := tenantDBPath(id)
+//	db, err := sqlx.Open(sqliteDriverName, fmt.Sprintf("file:%s?mode=rw", p))
+//	if err != nil {
+//		return nil, fmt.Errorf("failed to open tenant DB: %w", err)
+//	}
+//	return db, nil
+//}
+
 func connectToTenantDB(id int64) (*sqlx.DB, error) {
-	p := tenantDBPath(id)
-	db, err := sqlx.Open(sqliteDriverName, fmt.Sprintf("file:%s?mode=rw", p))
-	if err != nil {
-		return nil, fmt.Errorf("failed to open tenant DB: %w", err)
-	}
-	return db, nil
+	return adminDB, nil
 }
 
 // テナントDBを新規に作成する
-func createTenantDB(id int64) error {
-	p := tenantDBPath(id)
-
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("sqlite3 %s < %s", p, tenantDBSchemaFilePath))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to exec sqlite3 %s < %s, out=%s: %w", p, tenantDBSchemaFilePath, string(out), err)
-	}
-	return nil
-}
+//func createTenantDB(id int64) error {
+//	p := tenantDBPath(id)
+//
+//	cmd := exec.Command("sh", "-c", fmt.Sprintf("sqlite3 %s < %s", p, tenantDBSchemaFilePath))
+//	if out, err := cmd.CombinedOutput(); err != nil {
+//		return fmt.Errorf("failed to exec sqlite3 %s < %s, out=%s: %w", p, tenantDBSchemaFilePath, string(out), err)
+//	}
+//	return nil
+//}
 
 // システム全体で一意なIDを生成する
 var idGenerator katsubushi.Generator
@@ -500,9 +504,9 @@ func tenantsAddHandler(c echo.Context) error {
 	if err != nil {
 		return fmt.Errorf("idGenerator.NextID()")
 	}
-	if err := createTenantDB(int64(id)); err != nil {
-		return fmt.Errorf("error createTenantDB: id=%d name=%s %w", id, name, err)
-	}
+	//if err := createTenantDB(int64(id)); err != nil {
+	//	return fmt.Errorf("error createTenantDB: id=%d name=%s %w", id, name, err)
+	//}
 
 	if _, err := adminDB.ExecContext(
 		ctx,
@@ -716,7 +720,7 @@ func tenantsBillingHandler(c echo.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to connectToTenantDB: %w", err)
 			}
-			defer tenantDB.Close()
+			//defer tenantDB.Close()
 			cs := []CompetitionRow{}
 			if err := tenantDB.SelectContext(
 				ctx,
@@ -778,7 +782,7 @@ func playersListHandler(c echo.Context) error {
 	if err != nil {
 		return fmt.Errorf("error connectToTenantDB: %w", err)
 	}
-	defer tenantDB.Close()
+	//defer tenantDB.Close()
 
 	var pls []PlayerRow
 	if err := tenantDB.SelectContext(
@@ -824,7 +828,7 @@ func playersAddHandler(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tenantDB.Close()
+	//defer tenantDB.Close()
 
 	params, err := c.FormParams()
 	if err != nil {
@@ -887,7 +891,7 @@ func playerDisqualifiedHandler(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tenantDB.Close()
+	//defer tenantDB.Close()
 
 	playerID := c.Param("player_id")
 
@@ -947,7 +951,7 @@ func competitionsAddHandler(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tenantDB.Close()
+	//defer tenantDB.Close()
 
 	title := c.FormValue("title")
 
@@ -993,7 +997,7 @@ func competitionFinishHandler(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tenantDB.Close()
+	//defer tenantDB.Close()
 
 	id := c.Param("competition_id")
 	if id == "" {
@@ -1043,7 +1047,7 @@ func competitionScoreHandler(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tenantDB.Close()
+	//defer tenantDB.Close()
 
 	competitionID := c.Param("competition_id")
 	if competitionID == "" {
@@ -1112,9 +1116,10 @@ func competitionScoreHandler(c echo.Context) error {
 			return fmt.Errorf("row must have two columns: %#v", row)
 		}
 		playerID, scoreStr := row[0], row[1]
-		if _, err := retrievePlayer(ctx, tenantDB, playerID); err != nil {
+		if _, err := retrievePlayer(ctx, tx, playerID); err != nil {
 			// 存在しない参加者が含まれている
 			if errors.Is(err, sql.ErrNoRows) {
+				tx.Rollback()
 				return echo.NewHTTPError(
 					http.StatusBadRequest,
 					fmt.Sprintf("player not found: %s", playerID),
@@ -1149,7 +1154,7 @@ func competitionScoreHandler(c echo.Context) error {
 		})
 	}
 
-	if _, err := tenantDB.ExecContext(
+	if _, err := tx.ExecContext(
 		ctx,
 		"DELETE FROM player_score WHERE tenant_id = ? AND competition_id = ?",
 		v.tenantID,
@@ -1159,7 +1164,7 @@ func competitionScoreHandler(c echo.Context) error {
 		return fmt.Errorf("error Delete player_score: tenantID=%d, competitionID=%s, %w", v.tenantID, competitionID, err)
 	}
 	for _, ps := range playerScoreRows {
-		if _, err := tenantDB.NamedExecContext(
+		if _, err := tx.NamedExecContext(
 			ctx,
 			"INSERT INTO player_score (id, tenant_id, player_id, competition_id, score, row_num, created_at, updated_at) VALUES (:id, :tenant_id, :player_id, :competition_id, :score, :row_num, :created_at, :updated_at)",
 			ps,
@@ -1204,7 +1209,7 @@ func billingHandler(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tenantDB.Close()
+	//defer tenantDB.Close()
 
 	cs := []CompetitionRow{}
 	if err := tenantDB.SelectContext(
@@ -1261,7 +1266,7 @@ func playerHandler(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tenantDB.Close()
+	//defer tenantDB.Close()
 
 	if err := authorizePlayer(ctx, tenantDB, v.playerID); err != nil {
 		return err
@@ -1371,7 +1376,7 @@ func competitionRankingHandler(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tenantDB.Close()
+	//defer tenantDB.Close()
 
 	if err := authorizePlayer(ctx, tenantDB, v.playerID); err != nil {
 		return err
@@ -1391,17 +1396,24 @@ func competitionRankingHandler(c echo.Context) error {
 		return fmt.Errorf("error retrieveCompetition: %w", err)
 	}
 
+	tx, err := adminDB.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("adminDB.BeginTxx %w", err)
+	}
+
 	now := time.Now().Unix()
 	var tenant TenantRow
-	if err := adminDB.GetContext(ctx, &tenant, "SELECT * FROM tenant WHERE id = ?", v.tenantID); err != nil {
+	if err := tx.GetContext(ctx, &tenant, "SELECT * FROM tenant WHERE id = ?", v.tenantID); err != nil {
+		tx.Rollback()
 		return fmt.Errorf("error Select tenant: id=%d, %w", v.tenantID, err)
 	}
 
-	if _, err := adminDB.ExecContext(
+	if _, err := tx.ExecContext(
 		ctx,
 		"INSERT INTO visit_history (player_id, tenant_id, competition_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
 		v.playerID, tenant.ID, competitionID, now, now,
 	); err != nil {
+		tx.Rollback()
 		return fmt.Errorf(
 			"error Insert visit_history: playerID=%s, tenantID=%d, competitionID=%s, createdAt=%d, updatedAt=%d, %w",
 			v.playerID, tenant.ID, competitionID, now, now, err,
@@ -1412,6 +1424,7 @@ func competitionRankingHandler(c echo.Context) error {
 	rankAfterStr := c.QueryParam("rank_after")
 	if rankAfterStr != "" {
 		if rankAfter, err = strconv.ParseInt(rankAfterStr, 10, 64); err != nil {
+			tx.Rollback()
 			return fmt.Errorf("error strconv.ParseUint: rankAfterStr=%s, %w", rankAfterStr, err)
 		}
 	}
@@ -1424,7 +1437,7 @@ func competitionRankingHandler(c echo.Context) error {
 	//defer fl.Close()
 
 	crs := []CompetitionRank{}
-	if err := tenantDB.SelectContext(
+	if err := tx.SelectContext(
 		ctx,
 		&crs,
 		`
@@ -1449,6 +1462,7 @@ ORDER BY score DESC LIMIT $3 OFFSET $4;
 		100,
 		rankAfter,
 	); err != nil {
+		tx.Rollback()
 		return fmt.Errorf("error Select player_score: tenantID=%d, competitionID=%s, %w", tenant.ID, competitionID, err)
 	}
 	pagedRanks := make([]CompetitionRank, 0, 100)
@@ -1459,6 +1473,9 @@ ORDER BY score DESC LIMIT $3 OFFSET $4;
 			PlayerID:          cr.PlayerID,
 			PlayerDisplayName: cr.PlayerDisplayName,
 		})
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error tx.Commit: %w", err)
 	}
 
 	res := SuccessResult{
@@ -1497,7 +1514,7 @@ func playerCompetitionsHandler(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tenantDB.Close()
+	//defer tenantDB.Close()
 
 	if err := authorizePlayer(ctx, tenantDB, v.playerID); err != nil {
 		return err
@@ -1521,7 +1538,7 @@ func organizerCompetitionsHandler(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tenantDB.Close()
+	//defer tenantDB.Close()
 
 	return competitionsHandler(c, v, tenantDB)
 }
